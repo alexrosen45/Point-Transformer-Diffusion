@@ -377,8 +377,12 @@ def get_dataset(dataroot, npoints, category, use_mask=False):
 def evaluate_gen(opt, ref_pcs, logger):
     if ref_pcs is None:
         _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, use_mask=False)
+
+        print("Loading data...")
         test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
                                                       shuffle=False, num_workers=int(opt.workers), drop_last=False)
+        print("Finished loading data")
+
         ref = []
         for data in tqdm(test_dataloader, total=len(test_dataloader), desc='Generating Samples'):
             x = data['test_points']
@@ -411,8 +415,10 @@ def evaluate_gen(opt, ref_pcs, logger):
 def generate(model, opt):
     _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category)
 
+    print("Loading data...")
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
                                                   shuffle=False, num_workers=int(opt.workers), drop_last=False)
+    print("Finished loading data")
 
     with torch.no_grad():
         samples = []
@@ -422,8 +428,7 @@ def generate(model, opt):
             x = data['test_points'].transpose(1, 2)
             m, s = data['mean'].float(), data['std'].float()
 
-            gen = model.gen_samples(x.shape,
-                                    'cuda', clip_denoised=False).detach().cpu()
+            gen = model.gen_samples(x.shape, 'cuda', clip_denoised=False).detach().cpu()
 
             gen = gen.transpose(1, 2).contiguous()
             x = x.transpose(1, 2).contiguous()
@@ -433,8 +438,11 @@ def generate(model, opt):
             samples.append(gen)
             ref.append(x)
 
-            visualize_pointcloud_batch(os.path.join(str(Path(opt.eval_path).parent), 'x.png'), gen[:64], None,
-                                       None, None)
+            save_dir = "visualizations"  # Directory for saving images
+            os.makedirs(save_dir, exist_ok=True)  # Ensure the directory exists
+            save_path = os.path.join(save_dir, f"batch_{i}.png")
+
+            visualize_pointcloud_batch(save_path, gen[:64], None, None, None)
 
         samples = torch.cat(samples, dim=0)
         ref = torch.cat(ref, dim=0)
@@ -498,7 +506,7 @@ def parse_args():
     parser.add_argument('--dataroot', default='data/ShapeNetCore.v2.PC15k/')
     parser.add_argument('--category', default='chair')
 
-    parser.add_argument('--batch_size', type=int, default=50, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
     parser.add_argument('--workers', type=int, default=16, help='workers')
     parser.add_argument('--niter', type=int, default=10000, help='number of epochs to train for')
 

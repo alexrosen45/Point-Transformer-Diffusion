@@ -18,8 +18,8 @@ class FurthestSampling(Function):
         """
         assert xyz.is_contiguous()
         b, n, _ = xyz.size()
-        idx = torch.cuda.IntTensor(b, m)
-        temp = torch.cuda.FloatTensor(b, n).fill_(1e10)
+        idx = torch.zeros((b, m), dtype=torch.int32, device='cuda')
+        temp = torch.full((b, n), 1e10, dtype=torch.float32, device='cuda')
         pointops_cuda.furthestsampling_cuda(b, n, m, xyz, temp, idx)
         return idx
 
@@ -71,8 +71,8 @@ class NearestNeighbor(Function):
         assert known.is_contiguous()
         b, n, _ = unknown.size()
         m = known.size(1)
-        dist2 = torch.cuda.FloatTensor(b, n, 3)
-        idx = torch.cuda.IntTensor(b, n, 3)
+        dist2 = torch.empty((b, n, 3), dtype=torch.float32, device='cuda')
+        idx = torch.empty((b, n, 3), dtype=torch.int32, device='cuda')
         pointops_cuda.nearestneighbor_cuda(b, n, m, unknown, known, dist2, idx)
         return torch.sqrt(dist2), idx
 
@@ -99,7 +99,7 @@ class Interpolation(Function):
         b, c, m = features.size()
         n = idx.size(1)
         ctx.interpolation_for_backward = (idx, weight, m)
-        output = torch.cuda.FloatTensor(b, c, n)
+        output = torch.empty((b, c, n), dtype=torch.float32, device='cuda')
         pointops_cuda.interpolation_forward_cuda(b, c, m, n, features, idx, weight, output)
         return output
 
@@ -422,8 +422,8 @@ class KNNQuery(Function):
         assert new_xyz.is_contiguous()
         b, m, _ = new_xyz.size()
         n = xyz.size(1)
-        idx = torch.cuda.IntTensor(b, m, nsample).zero_()
-        dist2 = torch.cuda.FloatTensor(b, m, nsample).zero_()
+        idx = torch.zeros((b, m, nsample), dtype=torch.int32, device='cuda')
+        dist2 = torch.zeros((b, m, nsample), dtype=torch.float32, device='cuda')
         pointops_cuda.knnquery_cuda(b, n, m, nsample, xyz, new_xyz, idx, dist2)
         return idx
 

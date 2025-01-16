@@ -30,7 +30,7 @@ conda activate ptd_env
 
 ```
 cd lib/pointops/
-python setup.py install
+MAX_JOBS=1 python setup.py install
 cp build/lib.linux-x86_64-cpython-39/pointops_cuda.cpython-39-x86_64-linux-gnu.so .
 ```
 
@@ -38,7 +38,7 @@ Also, install *emd* for evaluation by
 
 ```
 cd metrics/PyTorchEMD/
-python setup.py install
+MAX_JOBS=1 python setup.py install
 cp build/lib.linux-x86_64-cpython-39/emd_cuda.cpython-39-x86_64-linux-gnu.so .
 ```
 
