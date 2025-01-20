@@ -55,13 +55,13 @@ Pretrained models can be downloaded [here](https://drive.google.com/drive/folder
 ## Training
 
 ```
-$ python train_generation.py --category car|chair|airplane
+python train_generation.py --category car|chair|airplane
 ```
 Please refer to the python file for optimal training parameters.
 
 ## Testing
 ```
-$ python train_generation.py --category car|chair|airplane --model MODEL_PATH
+python test_generation.py --category car|chair|airplane --model MODEL_PATH
 ```
 
 ## Results
