@@ -383,11 +383,11 @@ class GaussianDiffusion:
 
         if self.loss_type == 'mse':
             # predict the noise instead of x_start. seems to be weighted naturally like SNR
-            eps_recon = denoise_fn(data_t, t)
+            data_recon = denoise_fn(data_t, t)
             assert data_t.shape == data_start.shape
-            assert eps_recon.shape == torch.Size([B, D, N])
-            assert eps_recon.shape == data_start.shape
-            losses = ((noise - eps_recon)**2).mean(dim=list(range(1, len(data_start.shape))))
+            assert data_recon.shape == torch.Size([B, D, N])
+            assert data_recon.shape == data_start.shape
+            losses = ((data_start - data_recon)**2).mean(dim=list(range(1, len(data_start.shape))))
         elif self.loss_type == 'kl':
             losses = self._vb_terms_bpd(
                 denoise_fn=denoise_fn, data_start=data_start, data_t=data_t, t=t, clip_denoised=False,
@@ -475,23 +475,13 @@ class Model(nn.Module):
 
     def get_loss_iter(self, data, noises=None):
         B, D, N = data.shape    # batch_size, channels, num_points
-        t = torch.randint(1, self.diffusion.num_timesteps, size=(B,), device=data.device)
+        t = torch.randint(0, self.diffusion.num_timesteps, size=(B,), device=data.device)
 
         if noises is not None:
             noises[t!=0] = torch.randn((t!=0).sum(), *noises.shape[1:]).to(noises)
 
-        t_normalized = t / self.diffusion.num_timesteps
-        t_normalized = t_normalized.view(B, 1, 1)
-        t_minus_one_normalized = (t-1) / self.diffusion.num_timesteps
-        t_minus_one_normalized = t_minus_one_normalized.view(B, 1, 1)
-
-        x_t = t_normalized * data + (1 - t_normalized) * noises
-        x_t_minus_one = t_minus_one_normalized * data + (1-t_minus_one_normalized) * noises
-
-        x_t_minus_one_pred = self.model(x_t, t).transpose(1, 2)
-
-        losses = ((x_t_minus_one_pred - x_t_minus_one) ** 2).mean(dim=(1, 2))
-        
+        losses = self.diffusion.p_losses(
+            denoise_fn=self._denoise, data_start=data, t=t, noise=noises)
         assert losses.shape == t.shape == torch.Size([B])
         return losses
 
@@ -714,9 +704,13 @@ def train(gpu, opt, output_dir, noises_init):
             '''
             train diffusion
             '''
-            
-            x = x.cuda(gpu)
-            noises_batch = torch.rand_like(x).cuda(gpu)
+
+            if opt.distribution_type == 'multi' or (opt.distribution_type is None and gpu is not None):
+                x = x.cuda(gpu)
+                noises_batch = noises_batch.cuda(gpu)
+            elif opt.distribution_type == 'single':
+                x = x.cuda()
+                noises_batch = noises_batch.cuda()
 
             loss = model.get_loss_iter(x, noises_batch).mean()
 
@@ -885,7 +879,7 @@ def parse_args():
     parser.add_argument('--beta_start', default=0.0001)
     parser.add_argument('--beta_end', default=0.02)
     parser.add_argument('--schedule_type', default='linear')
-    parser.add_argument('--time_num', default=10)
+    parser.add_argument('--time_num', default=1000)
 
     #params
     parser.add_argument('--embed_dim', type=int, default=64, help='time embedding dimension')

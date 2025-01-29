@@ -290,11 +290,12 @@ class Model(nn.Module):
                     clip_denoised=False, max_timestep=None,
                     keep_running=False):
 
-        x_t = torch.rand(shape).to("cuda")
+        x_t = noise_fn(shape).to(device)
 
         for t in range(self.diffusion.num_timesteps+1, 1, -1):
             timestep = t * torch.ones((shape[0],))
-            x_t = self.model(x_t, timestep).transpose(1, 2)
+            x_0_pred = self.model(x_t, timestep).transpose(1, 2)
+            x_t = self.reconstruct(x_0_pred, t-1, constrain_fn)
 
         return x_t
 

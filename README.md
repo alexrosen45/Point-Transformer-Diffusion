@@ -40,6 +40,7 @@ Also, install *emd* for evaluation by
 cd metrics/PyTorchEMD/
 MAX_JOBS=1 python setup.py install
 cp build/lib.linux-x86_64-cpython-39/emd_cuda.cpython-39-x86_64-linux-gnu.so .
+# export TORCH_CUDA_ARCH_LIST="Fill this in after checking nvidia-smi"
 ```
 
 The code was tested on Ubuntu 22.04 LTS and GeForce RTX 3090.
