@@ -187,19 +187,16 @@ class GaussianDiffusion:
         """
         Sample from the model
         """
-        model_mean, _, model_log_variance, pred_xstart = self.p_mean_variance(denoise_fn, data=data, t=t,
-                                                                              clip_denoised=clip_denoised,
-                                                                              return_pred_xstart=True)
-        noise = noise_fn(size=data.shape, dtype=data.dtype, device=data.device)
-        assert noise.shape == data.shape
-        # no noise when t == 0
-        nonzero_mask = torch.reshape(1 - (t == 0).float(), [data.shape[0]] + [1] * (len(data.shape) - 1))
+        factors = torch.arange(1, self.num_timesteps+1, device=data.device) / self.num_timesteps
+        data = denoise_fn(data, t)
 
-        sample = model_mean
-        if use_var:
-            sample = sample + nonzero_mask * torch.exp(0.5 * model_log_variance) * noise
-        assert sample.shape == pred_xstart.shape
-        return (sample, pred_xstart) if return_pred_xstart else sample
+        print(t.item())
+
+        if t.item() > 0:
+            noise = factors[t] * torch.randn(data.shape, dtype=data.dtype, device=data.device)
+            data = data + noise
+
+        return data
 
     def p_sample_loop(self, denoise_fn, shape, device,
                       noise_fn=torch.randn, constrain_fn=lambda x, t: x,
@@ -289,15 +286,10 @@ class Model(nn.Module):
     def gen_samples(self, shape, device, noise_fn=torch.randn, constrain_fn=lambda x, t: x,
                     clip_denoised=False, max_timestep=None,
                     keep_running=False):
-
-        x_t = noise_fn(shape).to(device)
-
-        for t in range(self.diffusion.num_timesteps+1, 1, -1):
-            timestep = t * torch.ones((shape[0],))
-            x_0_pred = self.model(x_t, timestep).transpose(1, 2)
-            x_t = self.reconstruct(x_0_pred, t-1, constrain_fn)
-
-        return x_t
+        return self.diffusion.p_sample_loop(self._denoise, shape=shape, device=device, noise_fn=noise_fn,
+                                            constrain_fn=constrain_fn,
+                                            clip_denoised=clip_denoised, max_timestep=max_timestep,
+                                            keep_running=keep_running)
 
     def reconstruct(self, x0, t, constrain_fn=lambda x, t: x):
         return self.diffusion.reconstruct(x0, t, self._denoise, constrain_fn=constrain_fn)
@@ -435,8 +427,10 @@ def generate(model, opt):
 
             gen = model.gen_samples(x.shape, 'cuda', clip_denoised=False).detach().cpu()
 
+            gen = gen.transpose(1, 2).contiguous()
             x = x.transpose(1, 2).contiguous()
 
+            gen = gen * s + m
             x = x * s + m
             samples.append(gen)
             ref.append(x)
@@ -522,7 +516,7 @@ def parse_args():
     parser.add_argument('--beta_start', default=0.0001)
     parser.add_argument('--beta_end', default=0.02)
     parser.add_argument('--schedule_type', default='linear')
-    parser.add_argument('--time_num', default=10)
+    parser.add_argument('--time_num', default=1000)
 
     # '''Point-Transformer'''
     parser.add_argument('--stride', type=json.loads, default="[1, 2, 4, 4, 4]")

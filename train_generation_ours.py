@@ -374,20 +374,22 @@ class GaussianDiffusion:
         B, D, N = data_start.shape
         assert t.shape == torch.Size([B])
 
+        factors = torch.arange(1, self.num_timesteps+1, device=data_start.device) / self.num_timesteps
+
         if noise is None:
-            noise = torch.randn(data_start.shape, dtype=data_start.dtype, device=data_start.device)
+            noise = factors[t] * torch.randn(data_start.shape, dtype=data_start.dtype, device=data_start.device)
         assert noise.shape == data_start.shape and noise.dtype == data_start.dtype
 
         # diffuse the data
-        data_t = self.q_sample(x_start=data_start, t=t, noise=noise)
+        data_t = data_start + noise
 
         if self.loss_type == 'mse':
             # predict the noise instead of x_start. seems to be weighted naturally like SNR
-            data_recon = denoise_fn(data_t, t)
+            eps_recon = denoise_fn(data_t, t)
             assert data_t.shape == data_start.shape
-            assert data_recon.shape == torch.Size([B, D, N])
-            assert data_recon.shape == data_start.shape
-            losses = ((data_start - data_recon)**2).mean(dim=list(range(1, len(data_start.shape))))
+            assert eps_recon.shape == torch.Size([B, D, N])
+            assert eps_recon.shape == data_start.shape
+            losses = ((noise - eps_recon)**2).mean(dim=list(range(1, len(data_start.shape))))
         elif self.loss_type == 'kl':
             losses = self._vb_terms_bpd(
                 denoise_fn=denoise_fn, data_start=data_start, data_t=data_t, t=t, clip_denoised=False,
